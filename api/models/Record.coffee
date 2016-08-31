@@ -16,7 +16,7 @@ module.exports =
 			type:	'integer'
 			unique: true
 			autoIncrement: true
-			required: true
+			defaultTo:	0
 			
 		status:
 			type:	'string'
