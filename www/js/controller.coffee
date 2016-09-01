@@ -1,3 +1,4 @@
+util = require 'util'
 env = require './env.coffee'
 
 require './model.coffee'

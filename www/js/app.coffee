@@ -46,17 +46,19 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 					ret = new resources.Record({id: id})
 					ret.$fetch()			
 		
-		$stateProvider.state 'app.list',
-			url: "/cccar"
+		$stateProvider.state 'app.read',
+			url: "/cccar/:id"
 			cache: false
 			views:
 				'menuContent':
-					templateUrl: "templates/registration/list.html"
-					controller: 'RegistrationListCtrl'
+					templateUrl: "templates/registration/read.html"
+					controller: 'RegistrationCtrl'
 			resolve:
-				resources: 'resources'	
-				collection: (resources) ->
-					ret = new resources.RecordList()
+				id: ($stateParams) ->
+					$stateParams.id
+				resources: 'resources'
+				model: (resources, id) ->
+					ret = new resources.Record({id: id})
 					ret.$fetch()
 					
 		$urlRouterProvider.otherwise('/cccar/create');

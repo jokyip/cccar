@@ -3,18 +3,17 @@ http = require 'needle'
 fs = require 'fs'
 Promise = require 'bluebird'
 util = require 'util'
-agent = require 'https-proxy-agent'
 
 dir = '/etc/ssl/certs'
 files = fs.readdirSync(dir).filter (file) -> /.*\.pem/i.test(file)
 files = files.map (file) -> "#{dir}/#{file}"
 ca = files.map (file) -> fs.readFileSync file
 
-
+###
 options = 
 	timeout:	10000
 	agent:		new agent('http://proxy1.scig.gov.hk:8080')
-
+###
 module.exports = (options = sails.config.http.opts || {}) ->
 	_.defaults options, 
 		ca:			ca

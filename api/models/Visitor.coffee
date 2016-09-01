@@ -19,7 +19,7 @@ module.exports =
 		idType:
 			type:	'string'
 			enum:	['hkid','staffId']
-			defaultTo:	'staffId'
+			defaultsTo:	'staffId'
 			
 		idNo:
 			type:	'string'
@@ -29,10 +29,10 @@ module.exports =
 			
 		startDate:
 			type: 	'datetime'
-			defaultTo: ->
+			defaultsTo: ->
 				new Date
 			
 		endDate:
 			type: 	'datetime'
-			defaultTo: ->
+			defaultsTo: ->
 				new Date	

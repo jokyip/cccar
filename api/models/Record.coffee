@@ -12,15 +12,17 @@ module.exports =
 	autoPK:		true
 
 	attributes:
+		location:
+			type:	'string'
+			enum:	['WCDC','TWDC']
+			
 		number:
 			type:	'integer'
 			unique: true
-			autoIncrement: true
-			defaultTo:	0
 			
 		status:
 			type:	'string'
-			defaultTo:	'Draft'
+			defaultsTo:	'Draft'
 
 		project:
 			type:	'string'
@@ -40,18 +42,29 @@ module.exports =
 		visitors:
 			collection:	'visitor'
 			
+		issuedBy:
+			type:	'string'
+			
+		issuedAt:
+			type: 	'datetime'	
+			
 		endorsedBy:
 			type:	'string'
 			
 		endorsedAt:
 			type: 	'datetime'
-			defaultTo: ->
-				new Date
 			
 		approvedBy:
 			type:	'string'
 			
 		approvedAt:
 			type: 	'datetime'
-			defaultTo: ->
-				new Date		
+			
+	beforeUpdate: (values, cb) ->
+		if values.issuedBy
+			values.issuedAt = new Date
+		if values.endorsedBy
+			values.endorsedAt = new Date
+		if values.approvedBy
+			values.approvedAt = new Date		
+		cb()		

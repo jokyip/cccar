@@ -19,7 +19,7 @@ module.exports =
 		mongo:
 			adapter:	'sails-mongo'
 			driver:		'mongodb'
-			url: 'mongodb://localhost:27017/cccar' #dev
+			url: 'mongodb://cccar_mongo/cccar' #dev
 	
 	log:
 		level: 'silly'
