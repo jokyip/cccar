@@ -8,7 +8,6 @@ module.exports =
 				'startRequestTimer'
 				'cookieParser'
 				'session'
-				'prefix'
 				'bodyParser'
 				'compress'
 				'methodOverride'

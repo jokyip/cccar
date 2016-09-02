@@ -1,14 +1,37 @@
 <ion-view >
   <ion-header-bar>
-    	<button class="button button-icon button-clear ion-navicon" menu-toggle="left"></button>
     	<h1 class="title">{{'Edit' | translate}}</h1>
     	<button ng-if="model.project" class="button button-clear button-positive" ng-click="save()">{{'save' | translate}}</button>
   </ion-header-bar>
   <ion-content >
 	<div class="list">
+		<label class="item item-input item-select">
+		    <span class="input-label">{{'Location' | translate}}</span>
+		    <select ng-model="model.location">
+		      <option>WCDC</option>
+		      <option>TWDC</option>
+		    </select>
+		</label>
 		<label class="item item-input">
-	  		{{'Project' | translate}}: <input type="text" ng-model="model.project">
-	  	</label>  	
+		 	<span class="input-label">{{'Project' | translate}}</span>
+			<input type="text" ng-model="model.project">
+		</label>
+		<label class="item item-input">
+		 	<span class="input-label">{{'Purpose' | translate}}</span>
+			<input type="text" ng-model="model.purpose">
+		</label>
+		<label class="item item-input">
+		 	<span class="input-label">{{'Details' | translate}}</span>
+			<input type="text" ng-model="model.detail">
+		</label>
+		<label class="item item-input">
+		 	<span class="input-label">{{'Area of Visit' | translate}}</span>
+			<input type="text" ng-model="model.area">
+		</label>
+		<label class="item item-input">
+		 	<span class="input-label">{{'Cabinets' | translate}}</span>
+			<input type="text" ng-model="model.cabinet">
+		</label>
 	</div>	    	
   </ion-content>
 </ion-view>

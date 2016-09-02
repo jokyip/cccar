@@ -41,6 +41,9 @@ module.exports =
 			
 		visitors:
 			collection:	'visitor'
+		
+		createdBy:
+			type:	'string'	
 			
 		issuedBy:
 			type:	'string'
@@ -59,6 +62,9 @@ module.exports =
 			
 		approvedAt:
 			type: 	'datetime'
+			
+		nextHandler:
+			type:	'string'	
 			
 	beforeUpdate: (values, cb) ->
 		if values.issuedBy

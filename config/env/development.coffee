@@ -1,3 +1,5 @@
+winston = require 'winston'
+
 module.exports =
 	hookTimeout:	400000
 	
@@ -22,6 +24,12 @@ module.exports =
 			url: 'mongodb://cccar_mongo/cccar' #dev
 	
 	log:
-		level: 'silly'
+		level:		'silly'
+		custom: new winston.Logger
+			transports: [
+				new winston.transports.Console
+					level:		'silly'
+					timestamp:	true
+			]
 		
 			
