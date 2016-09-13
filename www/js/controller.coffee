@@ -20,12 +20,19 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 		_.extend $scope,
 			collection: collection
 
-	.controller 'RegistrationCtrl', ($scope, model, $location) ->
+	.controller 'RegistrationCtrl', ($scope, model, $location) ->		
 		_.extend $scope,
 			model: model
 			save: ->
 				$scope.model.$save()
 					.then ->
-						alert 'Saved!'
-					.catch ->
-						alert 'Error!'	
+						alert "Saved"
+					.catch (err) ->
+						alert "Error: #{err}"
+			submit: ->
+				$scope.model.goNext = true
+				$scope.model.$save()
+					.then ->
+						alert "Submitted"
+					.catch (err) ->
+						alert "Error: #{err}"				

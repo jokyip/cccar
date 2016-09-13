@@ -25,7 +25,7 @@
  * 
  */
 /**
- * bluebird build version 3.4.3
+ * bluebird build version 3.4.5
  * Features enabled: core, race, call_get, generators, map, nodeify, promisify, props, reduce, settle, some, using, timers, filter, any, each
 */
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.Promise=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof _dereq_=="function"&&_dereq_;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof _dereq_=="function"&&_dereq_;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
@@ -773,14 +773,16 @@ Promise.prototype._warn = function(message, shouldUseOwnTrace, promise) {
 Promise.onPossiblyUnhandledRejection = function (fn) {
     var domain = getDomain();
     possiblyUnhandledRejection =
-        typeof fn === "function" ? (domain === null ? fn : domain.bind(fn))
+        typeof fn === "function" ? (domain === null ?
+                                            fn : util.domainBind(domain, fn))
                                  : undefined;
 };
 
 Promise.onUnhandledRejectionHandled = function (fn) {
     var domain = getDomain();
     unhandledRejectionHandled =
-        typeof fn === "function" ? (domain === null ? fn : domain.bind(fn))
+        typeof fn === "function" ? (domain === null ?
+                                            fn : util.domainBind(domain, fn))
                                  : undefined;
 };
 
@@ -820,7 +822,20 @@ var fireDomEvent = (function() {
             var event = new CustomEvent("CustomEvent");
             util.global.dispatchEvent(event);
             return function(name, event) {
-                var domEvent = new CustomEvent(name.toLowerCase(), event);
+                var domEvent = new CustomEvent(name.toLowerCase(), {
+                    detail: event,
+                    cancelable: true
+                });
+                return !util.global.dispatchEvent(domEvent);
+            };
+        } else if (typeof Event === "function") {
+            var event = new Event("CustomEvent");
+            util.global.dispatchEvent(event);
+            return function(name, event) {
+                var domEvent = new Event(name.toLowerCase(), {
+                    cancelable: true
+                });
+                domEvent.detail = event;
                 return !util.global.dispatchEvent(domEvent);
             };
         } else {
@@ -1576,7 +1591,7 @@ return {
 
 },{"./errors":12,"./util":36}],10:[function(_dereq_,module,exports){
 "use strict";
-module.exports = function(Promise, tryConvertToPromise) {
+module.exports = function(Promise) {
 function returner() {
     return this.value;
 }
@@ -1586,7 +1601,6 @@ function thrower() {
 
 Promise.prototype["return"] =
 Promise.prototype.thenReturn = function (value) {
-    value = tryConvertToPromise(value);
     if (value instanceof Promise) value.suppressUnhandledRejections();
     return this._then(
         returner, undefined, undefined, {value: value}, undefined);
@@ -1611,13 +1625,11 @@ Promise.prototype.catchThrow = function (reason) {
 
 Promise.prototype.catchReturn = function (value) {
     if (arguments.length <= 1) {
-        value = tryConvertToPromise(value);
         if (value instanceof Promise) value.suppressUnhandledRejections();
         return this._then(
             undefined, returner, undefined, {value: value}, undefined);
     } else {
         var _value = arguments[1];
-        _value = tryConvertToPromise(_value);
         if (_value instanceof Promise) _value.suppressUnhandledRejections();
         var handler = function() {return _value;};
         return this.caught(value, handler);
@@ -1640,8 +1652,8 @@ function PromiseMapSeries(promises, fn) {
 }
 
 Promise.prototype.each = function (fn) {
-    return this.mapSeries(fn)
-            ._then(promiseAllThis, undefined, undefined, this, undefined);
+    return PromiseReduce(this, fn, INTERNAL, 0)
+              ._then(promiseAllThis, undefined, undefined, this, undefined);
 };
 
 Promise.prototype.mapSeries = function (fn) {
@@ -1649,12 +1661,13 @@ Promise.prototype.mapSeries = function (fn) {
 };
 
 Promise.each = function (promises, fn) {
-    return PromiseMapSeries(promises, fn)
-            ._then(promiseAllThis, undefined, undefined, promises, undefined);
+    return PromiseReduce(promises, fn, INTERNAL, 0)
+              ._then(promiseAllThis, undefined, undefined, promises, undefined);
 };
 
 Promise.mapSeries = PromiseMapSeries;
 };
+
 
 },{}],12:[function(_dereq_,module,exports){
 "use strict";
@@ -2211,7 +2224,8 @@ Promise.spawn = function (generatorFunction) {
 },{"./errors":12,"./util":36}],17:[function(_dereq_,module,exports){
 "use strict";
 module.exports =
-function(Promise, PromiseArray, tryConvertToPromise, INTERNAL) {
+function(Promise, PromiseArray, tryConvertToPromise, INTERNAL, async,
+         getDomain) {
 var util = _dereq_("./util");
 var canEvaluate = util.canEvaluate;
 var tryCatch = util.tryCatch;
@@ -2253,25 +2267,35 @@ if (canEvaluate) {
         var name = "Holder$" + total;
 
 
-        var code = "return function(tryCatch, errorObj, Promise) {           \n\
+        var code = "return function(tryCatch, errorObj, Promise, async) {    \n\
             'use strict';                                                    \n\
             function [TheName](fn) {                                         \n\
                 [TheProperties]                                              \n\
                 this.fn = fn;                                                \n\
+                this.asyncNeeded = true;                                     \n\
                 this.now = 0;                                                \n\
             }                                                                \n\
+                                                                             \n\
+            [TheName].prototype._callFunction = function(promise) {          \n\
+                promise._pushContext();                                      \n\
+                var ret = tryCatch(this.fn)([ThePassedArguments]);           \n\
+                promise._popContext();                                       \n\
+                if (ret === errorObj) {                                      \n\
+                    promise._rejectCallback(ret.e, false);                   \n\
+                } else {                                                     \n\
+                    promise._resolveCallback(ret);                           \n\
+                }                                                            \n\
+            };                                                               \n\
+                                                                             \n\
             [TheName].prototype.checkFulfillment = function(promise) {       \n\
                 var now = ++this.now;                                        \n\
                 if (now === [TheTotal]) {                                    \n\
-                    promise._pushContext();                                  \n\
-                    var callback = this.fn;                                  \n\
-                    var ret = tryCatch(callback)([ThePassedArguments]);      \n\
-                    promise._popContext();                                   \n\
-                    if (ret === errorObj) {                                  \n\
-                        promise._rejectCallback(ret.e, false);               \n\
+                    if (this.asyncNeeded) {                                  \n\
+                        async.invoke(this._callFunction, this, promise);     \n\
                     } else {                                                 \n\
-                        promise._resolveCallback(ret);                       \n\
+                        this._callFunction(promise);                         \n\
                     }                                                        \n\
+                                                                             \n\
                 }                                                            \n\
             };                                                               \n\
                                                                              \n\
@@ -2280,7 +2304,7 @@ if (canEvaluate) {
             };                                                               \n\
                                                                              \n\
             return [TheName];                                                \n\
-        }(tryCatch, errorObj, Promise);                                      \n\
+        }(tryCatch, errorObj, Promise, async);                               \n\
         ";
 
         code = code.replace(/\[TheName\]/g, name)
@@ -2289,8 +2313,8 @@ if (canEvaluate) {
             .replace(/\[TheProperties\]/g, assignment)
             .replace(/\[CancellationCode\]/g, cancellationCode);
 
-        return new Function("tryCatch", "errorObj", "Promise", code)
-                           (tryCatch, errorObj, Promise);
+        return new Function("tryCatch", "errorObj", "Promise", "async", code)
+                           (tryCatch, errorObj, Promise, async);
     };
 
     var holderClasses = [];
@@ -2331,6 +2355,7 @@ Promise.join = function () {
                             maybePromise._then(callbacks[i], reject,
                                                undefined, ret, holder);
                             promiseSetters[i](maybePromise, holder);
+                            holder.asyncNeeded = false;
                         } else if (((bitField & 33554432) !== 0)) {
                             callbacks[i].call(ret,
                                               maybePromise._value(), holder);
@@ -2343,7 +2368,14 @@ Promise.join = function () {
                         callbacks[i].call(ret, maybePromise, holder);
                     }
                 }
+
                 if (!ret._isFateSealed()) {
+                    if (holder.asyncNeeded) {
+                        var domain = getDomain();
+                        if (domain !== null) {
+                            holder.fn = util.domainBind(domain, holder.fn);
+                        }
+                    }
                     ret._setAsyncGuaranteed();
                     ret._setOnCancel(holder);
                 }
@@ -2371,19 +2403,18 @@ var getDomain = Promise._getDomain;
 var util = _dereq_("./util");
 var tryCatch = util.tryCatch;
 var errorObj = util.errorObj;
-var EMPTY_ARRAY = [];
 
 function MappingPromiseArray(promises, fn, limit, _filter) {
     this.constructor$(promises);
     this._promise._captureStackTrace();
     var domain = getDomain();
-    this._callback = domain === null ? fn : domain.bind(fn);
+    this._callback = domain === null ? fn : util.domainBind(domain, fn);
     this._preservedValues = _filter === INTERNAL
         ? new Array(this.length())
         : null;
     this._limit = limit;
     this._inFlight = 0;
-    this._queue = limit >= 1 ? [] : EMPTY_ARRAY;
+    this._queue = [];
     this._init$(undefined, -2);
 }
 util.inherits(MappingPromiseArray, PromiseArray);
@@ -2957,7 +2988,8 @@ Promise.prototype._then = function (
 
         async.invoke(settler, target, {
             handler: domain === null ? handler
-                : (typeof handler === "function" && domain.bind(handler)),
+                : (typeof handler === "function" &&
+                    util.domainBind(domain, handler)),
             promise: promise,
             receiver: receiver,
             value: value
@@ -3093,11 +3125,11 @@ Promise.prototype._addCallbacks = function (
         this._receiver0 = receiver;
         if (typeof fulfill === "function") {
             this._fulfillmentHandler0 =
-                domain === null ? fulfill : domain.bind(fulfill);
+                domain === null ? fulfill : util.domainBind(domain, fulfill);
         }
         if (typeof reject === "function") {
             this._rejectionHandler0 =
-                domain === null ? reject : domain.bind(reject);
+                domain === null ? reject : util.domainBind(domain, reject);
         }
     } else {
         var base = index * 4 - 4;
@@ -3105,11 +3137,11 @@ Promise.prototype._addCallbacks = function (
         this[base + 3] = receiver;
         if (typeof fulfill === "function") {
             this[base + 0] =
-                domain === null ? fulfill : domain.bind(fulfill);
+                domain === null ? fulfill : util.domainBind(domain, fulfill);
         }
         if (typeof reject === "function") {
             this[base + 1] =
-                domain === null ? reject : domain.bind(reject);
+                domain === null ? reject : util.domainBind(domain, reject);
         }
     }
     this._setLength(index + 1);
@@ -3423,12 +3455,12 @@ _dereq_("./method")(Promise, INTERNAL, tryConvertToPromise, apiRejection,
     debug);
 _dereq_("./bind")(Promise, INTERNAL, tryConvertToPromise, debug);
 _dereq_("./cancel")(Promise, PromiseArray, apiRejection, debug);
-_dereq_("./direct_resolve")(Promise, tryConvertToPromise);
+_dereq_("./direct_resolve")(Promise);
 _dereq_("./synchronous_inspection")(Promise);
 _dereq_("./join")(
-    Promise, PromiseArray, tryConvertToPromise, INTERNAL, debug);
+    Promise, PromiseArray, tryConvertToPromise, INTERNAL, async, getDomain);
 Promise.Promise = Promise;
-Promise.version = "3.4.3";
+Promise.version = "3.4.5";
 _dereq_('./map.js')(Promise, PromiseArray, apiRejection, tryConvertToPromise, INTERNAL, debug);
 _dereq_('./call_get.js')(Promise);
 _dereq_('./using.js')(Promise, apiRejection, tryConvertToPromise, createContext, INTERNAL, debug);
@@ -4249,27 +4281,37 @@ var tryCatch = util.tryCatch;
 function ReductionPromiseArray(promises, fn, initialValue, _each) {
     this.constructor$(promises);
     var domain = getDomain();
-    this._fn = domain === null ? fn : domain.bind(fn);
+    this._fn = domain === null ? fn : util.domainBind(domain, fn);
     if (initialValue !== undefined) {
         initialValue = Promise.resolve(initialValue);
         initialValue._attachCancellationCallback(this);
     }
     this._initialValue = initialValue;
     this._currentCancellable = null;
-    this._eachValues = _each === INTERNAL ? [] : undefined;
+    if(_each === INTERNAL) {
+        this._eachValues = Array(this._length);
+    } else if (_each === 0) {
+        this._eachValues = null;
+    } else {
+        this._eachValues = undefined;
+    }
     this._promise._captureStackTrace();
     this._init$(undefined, -5);
 }
 util.inherits(ReductionPromiseArray, PromiseArray);
 
 ReductionPromiseArray.prototype._gotAccum = function(accum) {
-    if (this._eachValues !== undefined && accum !== INTERNAL) {
+    if (this._eachValues !== undefined && 
+        this._eachValues !== null && 
+        accum !== INTERNAL) {
         this._eachValues.push(accum);
     }
 };
 
 ReductionPromiseArray.prototype._eachComplete = function(value) {
-    this._eachValues.push(value);
+    if (this._eachValues !== null) {
+        this._eachValues.push(value);
+    }
     return this._eachValues;
 };
 
@@ -4421,7 +4463,7 @@ if (util.isNode && typeof MutationObserver === "undefined") {
 } else if ((typeof MutationObserver !== "undefined") &&
           !(typeof window !== "undefined" &&
             window.navigator &&
-            window.navigator.standalone)) {
+            (window.navigator.standalone || window.cordova))) {
     schedule = (function() {
         var div = document.createElement("div");
         var opts = {attributes: true};
@@ -5500,6 +5542,10 @@ function getNativePromise() {
     }
 }
 
+function domainBind(self, cb) {
+    return self.bind(cb);
+}
+
 var ret = {
     isClass: isClass,
     isIdentifier: isIdentifier,
@@ -5532,7 +5578,8 @@ var ret = {
     isNode: isNode,
     env: env,
     global: globalObject,
-    getNativePromise: getNativePromise
+    getNativePromise: getNativePromise,
+    domainBind: domainBind
 };
 ret.isRecentNode = ret.isNode && (function() {
     var version = process.versions.node.split(".").map(Number);
@@ -5547,7 +5594,32 @@ module.exports = ret;
 },{"./es5":13}]},{},[4])(4)
 });                    ;if (typeof window !== 'undefined' && window !== null) {                               window.P = window.Promise;                                                     } else if (typeof self !== 'undefined' && self !== null) {                             self.P = self.Promise;                                                         }
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":2}],2:[function(require,module,exports){
+},{"_process":3}],2:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],3:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -5559,25 +5631,40 @@ var process = module.exports = {};
 var cachedSetTimeout;
 var cachedClearTimeout;
 
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
 (function () {
     try {
-        cachedSetTimeout = setTimeout;
-    } catch (e) {
-        cachedSetTimeout = function () {
-            throw new Error('setTimeout is not defined');
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
         }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
     }
     try {
-        cachedClearTimeout = clearTimeout;
-    } catch (e) {
-        cachedClearTimeout = function () {
-            throw new Error('clearTimeout is not defined');
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
         }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
     }
 } ())
 function runTimeout(fun) {
     if (cachedSetTimeout === setTimeout) {
         //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
         return setTimeout(fun, 0);
     }
     try {
@@ -5598,6 +5685,11 @@ function runTimeout(fun) {
 function runClearTimeout(marker) {
     if (cachedClearTimeout === clearTimeout) {
         //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
         return clearTimeout(marker);
     }
     try {
@@ -5709,7 +5801,604 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],5:[function(require,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = require('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = require('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":4,"_process":3,"inherits":2}],6:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -18064,12 +18753,12 @@ process.umask = function() { return 0; };
 }.call(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],4:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./lib')
 
-},{"./lib":9}],5:[function(require,module,exports){
+},{"./lib":12}],8:[function(require,module,exports){
 'use strict';
 
 var asap = require('asap/raw');
@@ -18284,7 +18973,7 @@ function doResolve(fn, promise) {
   }
 }
 
-},{"asap/raw":13}],6:[function(require,module,exports){
+},{"asap/raw":16}],9:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./core.js');
@@ -18299,7 +18988,7 @@ Promise.prototype.done = function (onFulfilled, onRejected) {
   });
 };
 
-},{"./core.js":5}],7:[function(require,module,exports){
+},{"./core.js":8}],10:[function(require,module,exports){
 'use strict';
 
 //This file contains the ES6 extensions to the core Promises/A+ API
@@ -18408,7 +19097,7 @@ Promise.prototype['catch'] = function (onRejected) {
   return this.then(null, onRejected);
 };
 
-},{"./core.js":5}],8:[function(require,module,exports){
+},{"./core.js":8}],11:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./core.js');
@@ -18426,7 +19115,7 @@ Promise.prototype['finally'] = function (f) {
   });
 };
 
-},{"./core.js":5}],9:[function(require,module,exports){
+},{"./core.js":8}],12:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./core.js');
@@ -18436,7 +19125,7 @@ require('./es6-extensions.js');
 require('./node-extensions.js');
 require('./synchronous.js');
 
-},{"./core.js":5,"./done.js":6,"./es6-extensions.js":7,"./finally.js":8,"./node-extensions.js":10,"./synchronous.js":11}],10:[function(require,module,exports){
+},{"./core.js":8,"./done.js":9,"./es6-extensions.js":10,"./finally.js":11,"./node-extensions.js":13,"./synchronous.js":14}],13:[function(require,module,exports){
 'use strict';
 
 // This file contains then/promise specific extensions that are only useful
@@ -18568,7 +19257,7 @@ Promise.prototype.nodeify = function (callback, ctx) {
   });
 }
 
-},{"./core.js":5,"asap":12}],11:[function(require,module,exports){
+},{"./core.js":8,"asap":15}],14:[function(require,module,exports){
 'use strict';
 
 var Promise = require('./core.js');
@@ -18632,7 +19321,7 @@ Promise.disableSynchronous = function() {
   Promise.prototype.getState = undefined;
 };
 
-},{"./core.js":5}],12:[function(require,module,exports){
+},{"./core.js":8}],15:[function(require,module,exports){
 "use strict";
 
 // rawAsap provides everything we need except exception management.
@@ -18700,7 +19389,7 @@ RawTask.prototype.call = function () {
     }
 };
 
-},{"./raw":13}],13:[function(require,module,exports){
+},{"./raw":16}],16:[function(require,module,exports){
 (function (global){
 "use strict";
 
@@ -18924,7 +19613,7 @@ rawAsap.makeRequestCallFromTimer = makeRequestCallFromTimer;
 // https://github.com/tildeio/rsvp.js/blob/cddf7232546a9cf858524b75cde6f9edf72620a7/lib/rsvp/asap.js
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],14:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 var env;
 
 env = require('./env.coffee');
@@ -18985,20 +19674,25 @@ angular.module('starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
       }
     }
   });
-  $stateProvider.state('app.list', {
-    url: "/cccar",
+  $stateProvider.state('app.read', {
+    url: "/cccar/:id",
     cache: false,
     views: {
       'menuContent': {
-        templateUrl: "templates/registration/list.html",
-        controller: 'RegistrationListCtrl'
+        templateUrl: "templates/registration/read.html",
+        controller: 'RegistrationCtrl'
       }
     },
     resolve: {
+      id: function($stateParams) {
+        return $stateParams.id;
+      },
       resources: 'resources',
-      collection: function(resources) {
+      model: function(resources, id) {
         var ret;
-        ret = new resources.RecordList();
+        ret = new resources.Record({
+          id: id
+        });
         return ret.$fetch();
       }
     }
@@ -19007,8 +19701,10 @@ angular.module('starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 });
 
 
-},{"./env.coffee":16}],15:[function(require,module,exports){
-var env;
+},{"./env.coffee":19}],18:[function(require,module,exports){
+var env, util;
+
+util = require('util');
 
 env = require('./env.coffee');
 
@@ -19034,17 +19730,25 @@ angular.module('starter.controller', ['ionic', 'http-auth-interceptor', 'ngCordo
     model: model,
     save: function() {
       return $scope.model.$save().then(function() {
-        return alert('Saved!');
-      })["catch"](function() {
-        return alert('Error!');
+        return alert("Saved");
+      })["catch"](function(err) {
+        return alert("Error: " + err);
+      });
+    },
+    submit: function() {
+      $scope.model.goNext = true;
+      return $scope.model.$save().then(function() {
+        return alert("Submitted");
+      })["catch"](function(err) {
+        return alert("Error: " + err);
       });
     }
   });
 });
 
 
-},{"./env.coffee":16,"./model.coffee":19}],16:[function(require,module,exports){
-io.sails.url = 'http://localhost:1337';
+},{"./env.coffee":19,"./model.coffee":22,"util":5}],19:[function(require,module,exports){
+io.sails.url = 'http://10.30.224.82:8030';
 
 io.sails.path = "/cccar/socket.io";
 
@@ -19078,7 +19782,7 @@ module.exports = {
 };
 
 
-},{}],17:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 var env;
 
 env = require('./env.coffee');
@@ -19122,7 +19826,7 @@ require('./locale.coffee');
 require('./platform.coffee');
 
 
-},{"./../lib/AngularJS-Toaster/toaster.js":22,"./../lib/angular-activerecord/src/angular-activerecord.js":24,"./../lib/angular-touch/angular-touch.js":25,"./../lib/angular-translate-loader-static-files/angular-translate-loader-static-files.js":26,"./../lib/angular-translate/angular-translate.js":27,"./../lib/jquery-deparam/jquery-deparam.js":29,"./../lib/jquery/jquery.js":30,"./../lib/ngCordova/dist/ng-cordova.js":31,"./../lib/sails-auth/src/http-auth-interceptor.js":32,"./../lib/tagDirective/index.js":34,"./../lib/util.auth/index.js":38,"./app.coffee":14,"./controller.coffee":15,"./env.coffee":16,"./locale.coffee":18,"./model.coffee":19,"./platform.coffee":20,"./templates.js":21,"bluebird":1,"lodash":3}],18:[function(require,module,exports){
+},{"./../lib/AngularJS-Toaster/toaster.js":25,"./../lib/angular-activerecord/src/angular-activerecord.js":27,"./../lib/angular-touch/angular-touch.js":28,"./../lib/angular-translate-loader-static-files/angular-translate-loader-static-files.js":29,"./../lib/angular-translate/angular-translate.js":30,"./../lib/jquery-deparam/jquery-deparam.js":32,"./../lib/jquery/jquery.js":33,"./../lib/ngCordova/dist/ng-cordova.js":34,"./../lib/sails-auth/src/http-auth-interceptor.js":35,"./../lib/tagDirective/index.js":37,"./../lib/util.auth/index.js":41,"./app.coffee":17,"./controller.coffee":18,"./env.coffee":19,"./locale.coffee":21,"./model.coffee":22,"./platform.coffee":23,"./templates.js":24,"bluebird":1,"lodash":6}],21:[function(require,module,exports){
 angular.module('locale', ['pascalprecht.translate']).config(function($translateProvider) {
   return $translateProvider.useStaticFilesLoader({
     prefix: 'locale/',
@@ -19134,7 +19838,7 @@ angular.module('locale', ['pascalprecht.translate']).config(function($translateP
 });
 
 
-},{}],19:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 var extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -19177,7 +19881,7 @@ angular.module('starter.model', ['PageableAR']).factory('resources', function(pa
 });
 
 
-},{"./../lib/PageableAR/model.js":23}],20:[function(require,module,exports){
+},{"./../lib/PageableAR/model.js":26}],23:[function(require,module,exports){
 var Promise, config, env, platform;
 
 env = require('./env.coffee');
@@ -19307,14 +20011,15 @@ angular.module('platform', ['ionic', 'ngCordova']).config(['$cordovaInAppBrowser
 angular.module('platform').factory('platform', ['$rootScope', '$cordovaInAppBrowser', '$location', '$http', platform]);
 
 
-},{"./env.coffee":16,"promise":4}],21:[function(require,module,exports){
-angular.module('templates', []).run(['$templateCache', function($templateCache) {$templateCache.put('templates/menu.html','<ion-side-menus enable-menu-with-back-views="true">\n  <ion-side-menu-content>\n  \t<ion-nav-view name="menuContent"></ion-nav-view>\n  </ion-side-menu-content>\n  <ion-side-menu side="left" ng-controller="MenuCtrl">\n    <ion-header-bar class="bar-stable">\n      <h1 class="title">{{\'menu\' | translate}}</h1>\n    </ion-header-bar>\n    <ion-content>\n      <ion-list>\n        <ion-item nav-clear menu-close href="#/todo/list">\n          {{\'List\' | translate}}\n        </ion-item>\n\t    <ion-item nav-clear menu-close ng-if="env.isNative()" ng-click="navigator.app.exitApp()">\n          Exit\n        </ion-item>\n      </ion-list>\n    </ion-content>\n  </ion-side-menu>\n</ion-side-menus>\n');
+},{"./env.coffee":19,"promise":7}],24:[function(require,module,exports){
+angular.module('templates', []).run(['$templateCache', function($templateCache) {$templateCache.put('templates/menu.html','<ion-nav-view name="menuContent"></ion-nav-view>');
 $templateCache.put('templates/search.html','<ion-view view-title="Search">\n  <ion-content>\n    <h1>Search</h1>\n  </ion-content>\n</ion-view>\n');
-$templateCache.put('templates/registration/create.html','<ion-view>\n\t<ion-header-bar class="item-input-inset" align-title="left">\n\t    <button class="button button-icon button-clear ion-navicon" menu-toggle="left"></button>\n\t    <h1 class="title" style="text-align:center">{{\'Issue\' | translate}}</h1>\n\t\t<button ng-if="model.task" class="button button-clear button-positive" ng-click="save()">{{\'save\' | translate}}</button>\n\t</ion-header-bar>\n\t<ion-content>\n\t\t<div class="list">\n\t\t\t<label class="item item-input">\n\t\t\t\t{{\'Project\' | translate}}:<input type="text" name="Project" ng-model="model.project" >\n\t\t\t</label>\n\t\t</div>\n\t</ion-content>\n</ion-view>');
-$templateCache.put('templates/registration/edit.html','<ion-view >\n  <ion-header-bar>\n    \t<button class="button button-icon button-clear ion-navicon" menu-toggle="left"></button>\n    \t<h1 class="title">{{\'Edit\' | translate}}</h1>\n    \t<button ng-if="model.project" class="button button-clear button-positive" ng-click="save()">{{\'save\' | translate}}</button>\n  </ion-header-bar>\n  <ion-content >\n\t<div class="list">\n\t\t<label class="item item-input">\n\t  \t\t{{\'Project\' | translate}}: <input type="text" ng-model="model.project">\n\t  \t</label>  \t\n\t</div>\t    \t\n  </ion-content>\n</ion-view>');
+$templateCache.put('templates/registration/edit.html','<ion-view >\n  <ion-header-bar>\n    \t<h1 class="title">{{\'Registration Details\' | translate}}</h1>\n    \t<button ng-if="model.nextAction=\'Issue\'" class="button button-clear button-positive" ng-click="save()">{{\'Save\' | translate}}</button>\n    \t<button ng-if="model.nextAction=\'Issue\'" class="button button-clear button-positive" ng-click="submit()">{{\'Issue\' | translate}}</button>\n  </ion-header-bar>\n  <ion-content >\n\t<div class="list">\n\t\t<label class="item item-input">\n\t\t \t<span class="input-label">{{\'Record No.\' | translate}}</span>\n\t\t\t<input type="text" ng-model="model.number">\n\t\t</label>\n\t\t<label class="item item-input item-select">\n\t\t    <span class="input-label">{{\'Location\' | translate}}</span>\n\t\t    <select ng-model="model.location">\n\t\t      <option>WCDC</option>\n\t\t      <option>TWDC</option>\n\t\t    </select>\n\t\t</label>\n\t\t<label class="item item-input">\n\t\t \t<span class="input-label">{{\'Project\' | translate}}</span>\n\t\t\t<input type="text" ng-model="model.project">\n\t\t</label>\n\t\t<label class="item item-input">\n\t\t \t<span class="input-label">{{\'Purpose\' | translate}}</span>\n\t\t\t<input type="text" ng-model="model.purpose">\n\t\t</label>\n\t\t<label class="item item-input">\n\t\t \t<span class="input-label">{{\'Details\' | translate}}</span>\n\t\t\t<input type="text" ng-model="model.detail">\n\t\t</label>\n\t\t<label class="item item-input">\n\t\t \t<span class="input-label">{{\'Area of Visit\' | translate}}</span>\n\t\t\t<input type="text" ng-model="model.area">\n\t\t</label>\n\t\t<label class="item item-input">\n\t\t \t<span class="input-label">{{\'Cabinets\' | translate}}</span>\n\t\t\t<input type="text" ng-model="model.cabinet">\n\t\t</label>\n\t</div>\t    \t\n  </ion-content>\n</ion-view>');
 $templateCache.put('templates/registration/item.html','<div>\n\t<label class="item item-input">\n\t\t<i class="icon ion-search placeholder-icon"></i>\n\t\t<input type="search" placeholder="{{\'Search\' | translate}}" ng-model="search">\n\t</label>\n</div>\n<ion-content class="list">\t\n\t<ion-list>\n\t<ion-item ng-repeat="model in collection.models"  >\n\t\t<div class="row">\n\t\t\t<div class="col" ng-click="openurl(model);">\n\t\t\t\t<h2>{{model.project}}</h2>\n\t\t\t</div>\n\t\t</div>\n\t\t<ion-option-button ng-if="model.type!==undefined && model.type != \'manual\' && model.progress < 100" class="button button-balanced icon-left ion-checkmark" on-tap="$event.stopPropagation(); completeTask(model);">Complete</ion-option-button>\n\t</ion-item>\n\t</ion-list>\n\t<ion-infinite-scroll ng-if="collection.state.skip < collection.state.count" on-infinite="loadMore()">\n\t</ion-infinite-scroll>\t\n</ion-content>');
-$templateCache.put('templates/registration/list.html','<ion-header-bar class="item-input-inset">\n    <button class="button button-icon button-clear ion-navicon" menu-toggle="left">\n    </button>\n    <h1 class=\'title\'>\n    \t<span>{{\'CCCAR\' | translate}}</span>\n    </h1>\n    <button class="button ion-plus-round button-clear" ui-sref="app.create"></button>  \n</ion-header-bar>\n\n<ng-include src="\'templates/registration/item.html\'"></ng-include>');}]);
-},{}],22:[function(require,module,exports){
+$templateCache.put('templates/registration/list.html','<ion-header-bar class="item-input-inset">\n    <button class="button button-icon button-clear ion-navicon" menu-toggle="left">\n    </button>\n    <h1 class=\'title\'>\n    \t<span>{{\'CCCAR\' | translate}}</span>\n    </h1>\n    <button class="button ion-plus-round button-clear" ui-sref="app.create"></button>  \n</ion-header-bar>\n\n<ng-include src="\'templates/registration/item.html\'"></ng-include>');
+$templateCache.put('templates/registration/read.html','<ion-view >\n  <ion-header-bar>\n    \t<h1 class="title">{{\'Registration Details\' | translate}}</h1> \n    \t<button ng-if="model.showAction" class="button button-clear button-positive" ng-click="submit()">{{model.nextAction | translate}}</button>   \t\n  </ion-header-bar>\n  <ion-content >\n\t<div class="list list-inset">\n\t\t<div class="row">\n\t\t\t<div class="col col-33">{{\'Location\' | translate}}</div>\n\t\t\t<div class="col">{{model.location}}</div>\n\t\t</div>\n\t\t<div class="row">\n\t\t\t<div class="col col-33">{{\'Project\' | translate}}</div>\n\t\t\t<div class="col">{{model.project}}</div>\n\t\t</div>\n\t\t<div class="row">\n\t\t\t<div class="col col-33">{{\'Purpose\' | translate}}</div>\n\t\t\t<div class="col">{{model.purpose}}</div>\n\t\t</div>\n\t\t<div class="row">\n\t\t\t<div class="col col-33">{{\'Details\' | translate}}</div>\n\t\t\t<div class="col">{{model.detail}}</div>\n\t\t</div>\n\t\t<div class="row">\n\t\t\t<div class="col col-33">{{\'Area of Visit\' | translate}}</div>\n\t\t\t<div class="col">{{model.area}}</div>\n\t\t</div>\n\t\t<div class="row">\n\t\t\t<div class="col col-33">{{\'Cabinets\' | translate}}</div>\n\t\t\t<div class="col">{{model.cabinet}}</div>\n\t\t</div>\n\t\t<br>\n\t\t<div class="item">\n\t\t\t<p>Issued by {{model.issuedBy}} on {{model.issuedAt | date:"dd/MM/yyyy \'at\' h:mma"}}\n\t\t\t<p ng-if="model.issuedBy && !model.endorsedBy"><b>{{model.status}} by {{model.nextHandler}}</b>\n\t\t\t<p ng-if="model.endorsedBy">Endorsed by {{model.endorsedBy}} on {{model.endorsedAt | date:"dd/MM/yyyy \'at\' h:mma"}}\n\t\t\t<p ng-if="model.endorsedBy && !model.approvedBy"><b>{{model.status}} by {{model.nextHandler}}</b>\n\t\t\t<p ng-if="model.approvedBy">Approved by {{model.approvedBy}} on {{model.approvedAt | date:"dd/MM/yyyy \'at\' h:mma"}}\n\t\t</div>\n\t</div>\t    \t\n  </ion-content>\n</ion-view>');
+$templateCache.put('templates/registration/select.html','<span>\n\t<a class="button icon-right ion-ios-arrow-down" ng-click="abc()">\n\t\t{{selectedTitle()}}\n\t</a>\n</span>');}]);
+},{}],25:[function(require,module,exports){
 /* global angular */
 (function (window, document) {
     'use strict';
@@ -19794,7 +20499,7 @@ $templateCache.put('templates/registration/list.html','<ion-header-bar class="it
             }]
         );
 })(window, document);
-},{}],23:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 var _, model,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
@@ -20102,7 +20807,7 @@ model = function(ActiveRecord, $sailsSocket, server) {
 
 angular.module('PageableAR', ['ActiveRecord', 'sails.io']).factory('pageableAR', ['ActiveRecord', '$sailsSocket', model]);
 
-},{"./../angular-activerecord/src/angular-activerecord.js":24,"./../angularSails/dist/ngsails.io.js":28,"./../underscore/underscore.js":37}],24:[function(require,module,exports){
+},{"./../angular-activerecord/src/angular-activerecord.js":27,"./../angularSails/dist/ngsails.io.js":31,"./../underscore/underscore.js":40}],27:[function(require,module,exports){
 /*!
  * @licence ActiveRecord for AngularJS
  * (c) 2013-2014 Bob Fanger, Jeremy Ashkenas, DocumentCloud
@@ -20506,7 +21211,7 @@ angular.module('ActiveRecord', []).factory('ActiveRecord', ['$http', '$q', '$par
 	};
 	return ActiveRecord;
 }]);
-},{}],25:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /**
  * @license AngularJS v1.3.20
  * (c) 2010-2014 Google, Inc. http://angularjs.org
@@ -21139,7 +21844,7 @@ makeSwipeDirective('ngSwipeRight', 1, 'swiperight');
 
 })(window, window.angular);
 
-},{}],26:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /*!
  * angular-translate - v2.7.2 - 2015-06-01
  * http://github.com/angular-translate/angular-translate
@@ -21255,7 +21960,7 @@ return 'pascalprecht.translate';
 
 }));
 
-},{}],27:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 /*!
  * angular-translate - v2.7.2 - 2015-06-01
  * http://github.com/angular-translate/angular-translate
@@ -24161,7 +24866,7 @@ return 'pascalprecht.translate';
 
 }));
 
-},{}],28:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 (function ( window, angular ) {
 
 'use strict';
@@ -25920,7 +26625,7 @@ function arrayRemove(array, value) {
 
 })( window, angular );
 
-},{}],29:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 (function(deparam){
     if (typeof require === 'function' && typeof exports === 'object' && typeof module === 'object') {
         var jquery = require("./../jquery/jquery.js");
@@ -26029,7 +26734,7 @@ function arrayRemove(array, value) {
     return deparam;
 });
 
-},{"./../jquery/jquery.js":30}],30:[function(require,module,exports){
+},{"./../jquery/jquery.js":33}],33:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v2.0.3
  * http://jquery.com/
@@ -34860,7 +35565,7 @@ if ( typeof window === "object" && typeof window.document === "object" ) {
 
 })( window );
 
-},{}],31:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /*!
  * ngCordova
  * v0.1.27-alpha
@@ -42222,8 +42927,8 @@ angular.module('ngCordova.plugins.zip', [])
   }]);
 
 })();
-},{}],32:[function(require,module,exports){
-// Generated by CoffeeScript 1.8.0
+},{}],35:[function(require,module,exports){
+// Generated by CoffeeScript 1.10.0
 (function() {
   var authInterceptor;
 
@@ -42238,7 +42943,7 @@ angular.module('ngCordova.plugins.zip', [])
   and broadcasts 'event:auth-forbidden'.
    */
 
-  authInterceptor = function($injector, $rootScope, $q, httpBuffer, transport) {
+  authInterceptor = function($injector, $rootScope, $log, $q, httpBuffer, transport) {
     var $transport;
     $transport = null;
     return {
@@ -42255,6 +42960,9 @@ angular.module('ngCordova.plugins.zip', [])
               return deferred.promise;
             case 403:
               $rootScope.$broadcast('event:auth-forbidden', rejection);
+              break;
+            default:
+              $log.error(rejection);
           }
         }
         return $q.reject(rejection);
@@ -42270,7 +42978,7 @@ angular.module('ngCordova.plugins.zip', [])
       		retry of all deferred requests.
       		@param data an optional argument to pass on to $broadcast which may be useful for
       		example if you need to pass through details of the user that was logged in
-      		@param configUpdater an optional transformation function that can modify the                                                                                                                                                   
+      		@param configUpdater an optional transformation function that can modify the
       		requests that are retried after having logged in.  This can be used for example
       		to add an authentication token.  It must return the request.
        */
@@ -42296,16 +43004,16 @@ angular.module('ngCordova.plugins.zip', [])
     };
   }).config(function($httpProvider) {
     var interceptor;
-    interceptor = function($injector, $rootScope, $q, httpBuffer) {
-      return authInterceptor($injector, $rootScope, $q, httpBuffer, '$http');
+    interceptor = function($injector, $rootScope, $log, $q, httpBuffer) {
+      return authInterceptor($injector, $rootScope, $log, $q, httpBuffer, '$http');
     };
-    return $httpProvider != null ? $httpProvider.interceptors.push(['$injector', '$rootScope', '$q', 'httpBuffer', interceptor]) : void 0;
+    return $httpProvider != null ? $httpProvider.interceptors.push(['$injector', '$rootScope', '$log', '$q', 'httpBuffer', interceptor]) : void 0;
   }).config(function($sailsSocketProvider) {
     var interceptor;
-    interceptor = function($injector, $rootScope, $q, httpBuffer) {
-      return authInterceptor($injector, $rootScope, $q, httpBuffer, '$sailsSocket');
+    interceptor = function($injector, $rootScope, $log, $q, httpBuffer) {
+      return authInterceptor($injector, $rootScope, $log, $q, httpBuffer, '$sailsSocket');
     };
-    return $sailsSocketProvider != null ? $sailsSocketProvider.interceptors.push(['$injector', '$rootScope', '$q', 'httpBuffer', interceptor]) : void 0;
+    return $sailsSocketProvider != null ? $sailsSocketProvider.interceptors.push(['$injector', '$rootScope', '$log', '$q', 'httpBuffer', interceptor]) : void 0;
   }).config(function($provide) {
     return $provide.decorator('$sailsSocketBackend', function($delegate, $injector, $log) {
       var backend, newBackend;
@@ -42314,24 +43022,21 @@ angular.module('ngCordova.plugins.zip', [])
         return backend != null ? backend : backend = new Promise(function(fulfill, reject) {
           var socket;
           socket = io.sails.connect();
-          socket.on('connect', function() {
+          return socket.on('connect', function() {
+            socket.on('reconnecting', function() {
+              return $log.error("Data connection not available");
+            });
             return fulfill(socket);
-          });
-          socket.on('connect_error', function() {
-            return reject();
-          });
-          return socket.on('connect_timeout', function() {
-            return reject();
           });
         });
       };
       document.addEventListener('pause', function() {
-        var _ref;
-        return (_ref = io.socket) != null ? _ref._raw.disconnect() : void 0;
+        var ref;
+        return (ref = io.socket) != null ? ref._raw.disconnect() : void 0;
       });
       document.addEventListener('resume', function() {
-        var _ref;
-        return (_ref = io.socket) != null ? _ref._raw.connect() : void 0;
+        var ref;
+        return (ref = io.socket) != null ? ref._raw.connect() : void 0;
       });
       return function(method, url, post, callback, headers, timeout, withCredentials, responseType) {
         return newBackend().then(function(socket) {
@@ -42346,7 +43051,7 @@ angular.module('ngCordova.plugins.zip', [])
           return io.socket.request(opts, function(body, jwr) {
             return callback(jwr.statusCode, body);
           });
-        })["catch"]($log.error);
+        });
       };
     });
   });
@@ -42369,19 +43074,19 @@ angular.module('ngCordova.plugins.zip', [])
         });
       },
       rejectAll: function(reason) {
-        var req, _i, _len;
+        var i, len, req;
         if (reason) {
-          for (_i = 0, _len = buffer.length; _i < _len; _i++) {
-            req = buffer[_i];
+          for (i = 0, len = buffer.length; i < len; i++) {
+            req = buffer[i];
             req.deferred.reject(reason);
           }
         }
         return buffer = [];
       },
       retryAll: function(updater) {
-        var req, _i, _len;
-        for (_i = 0, _len = buffer.length; _i < _len; _i++) {
-          req = buffer[_i];
+        var i, len, req;
+        for (i = 0, len = buffer.length; i < len; i++) {
+          req = buffer[i];
           retryHttpRequest(updater(req.config), req.deferred);
         }
         return buffer = [];
@@ -42391,7 +43096,7 @@ angular.module('ngCordova.plugins.zip', [])
 
 }).call(this);
 
-},{"./../../angularSails/dist/ngsails.io.js":28}],33:[function(require,module,exports){
+},{"./../../angularSails/dist/ngsails.io.js":31}],36:[function(require,module,exports){
 
 /*
 icon tag to show specified src file or ionic icon if src is not defined  
@@ -42446,7 +43151,7 @@ iconDir = function($compile) {
 angular.module('ngIcon', ['ionic']).directive('icon', ['$compile', iconDir]);
 
 
-},{}],34:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 require('./tag.coffee');
 
@@ -42897,7 +43602,7 @@ angular.module('ngTagEditor', []).directive('tagEditor', tagDir);
 
 },{}]},{},[1]);
 
-},{"./icon.coffee":33,"./select.coffee":35,"./tag.coffee":36}],35:[function(require,module,exports){
+},{"./icon.coffee":36,"./select.coffee":38,"./tag.coffee":39}],38:[function(require,module,exports){
 
 /*
 select from array of primitive
@@ -43202,7 +43907,7 @@ selectModelDir = function($ionicPlatform, $ionicModal) {
 angular.module('ngFancySelect', ['ionic']).directive('fancySelect', ['$ionicPlatform', '$ionicModal', selectDir]).directive('fancySelectObject', ['$ionicPlatform', '$ionicModal', selectObjectDir]).directive('fancySelectModel', ['$ionicPlatform', '$ionicModal', selectModelDir]);
 
 
-},{}],36:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 var tagCtrl, tagDir,
   indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
@@ -43278,7 +43983,7 @@ tagDir = function() {
 angular.module('ngTagEditor', []).directive('tagEditor', tagDir);
 
 
-},{}],37:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -44828,7 +45533,7 @@ angular.module('ngTagEditor', []).directive('tagEditor', tagDir);
   }
 }.call(this));
 
-},{}],38:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 var $, _;
 
 $ = require("./../jquery/jquery.js");
@@ -44909,4 +45614,4 @@ angular.module('util.auth', ['ionic', 'http-auth-interceptor']).config(function(
   });
 });
 
-},{"./../jquery-deparam/jquery-deparam.js":29,"./../jquery/jquery.js":30,"./../sails-auth/src/http-auth-interceptor.js":32,"lodash":3}]},{},[17]);
+},{"./../jquery-deparam/jquery-deparam.js":32,"./../jquery/jquery.js":33,"./../sails-auth/src/http-auth-interceptor.js":35,"lodash":6}]},{},[20]);

@@ -1,6 +1,7 @@
 <ion-view >
   <ion-header-bar>
-    	<h1 class="title">{{'Registration Details' | translate}}</h1>    	
+    	<h1 class="title">{{'Registration Details' | translate}}</h1> 
+    	<button ng-if="model.showAction" class="button button-clear button-positive" ng-click="submit()">{{model.nextAction | translate}}</button>   	
   </ion-header-bar>
   <ion-content >
 	<div class="list list-inset">

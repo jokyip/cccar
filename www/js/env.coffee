@@ -1,4 +1,4 @@
-io.sails.url = 'http://localhost:1337'
+io.sails.url = 'http://10.30.224.82:8030'
 io.sails.path = "/cccar/socket.io"
 io.sails.useCORSRouteToGetCookie = false
     

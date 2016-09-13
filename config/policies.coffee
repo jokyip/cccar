@@ -6,4 +6,4 @@ module.exports =
 			find:		['isAuth']
 			findOne:	['isAuth']
 			create:		['isAuth', 'setOwner']
-			update:		['isAuth']
+			update:		['isAuth', 'setHandlerNDate']

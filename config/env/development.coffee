@@ -22,6 +22,16 @@ module.exports =
 			adapter:	'sails-mongo'
 			driver:		'mongodb'
 			url: 'mongodb://cccar_mongo/cccar' #dev
+			
+	todo:
+		url: 		"http://10.30.224.82:8010/api/todo"
+		client:
+			id:		'todomsgUATAuth'
+			secret: 'pass1234'
+		user:
+			id: 	'todoadmin'
+			secret: 'pass1234'
+		scope:  	[ "https://mob.myvnc.com/org/users", "https://mob.myvnc.com/mobile"]		
 	
 	log:
 		level:		'silly'

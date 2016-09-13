@@ -64,13 +64,13 @@ module.exports =
 			type: 	'datetime'
 			
 		nextHandler:
+			type:	'string'
+			
+		nextAction:
 			type:	'string'	
 			
-	beforeUpdate: (values, cb) ->
-		if values.issuedBy
-			values.issuedAt = new Date
-		if values.endorsedBy
-			values.endorsedAt = new Date
-		if values.approvedBy
-			values.approvedAt = new Date		
-		cb()		
+		todoId:
+			type:	'string'
+			
+		taskId:
+			type:	'string'

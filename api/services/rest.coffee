@@ -39,6 +39,17 @@ module.exports = (options = sails.config.http.opts || {}) ->
 				if err
 					return reject err
 				fulfill res
+				
+	put: (token, url, data) ->
+		new Promise (fulfill, reject) ->
+			opts =
+				headers:
+					Authorization:	"Bearer #{token}"
+			_.extend opts, options
+			http.put url, data, opts, (err, res) ->
+				if err
+					return reject err
+				fulfill res			
 					
 	push: (token, roster, msg) ->
 		# ensure roster.createdBy is populated
