@@ -19,18 +19,6 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 			abstract: true
 			templateUrl: "templates/menu.html"
 	
-		$stateProvider.state 'app.create',
-			url: "/cccar/create"
-			cache: false
-			views:
-				'menuContent':
-					templateUrl: "templates/registration/create.html"
-					controller: 'RegistrationCtrl'
-			resolve:
-				resources: 'resources'
-				model: (resources) ->
-					new resources.Record()				
-	
 		$stateProvider.state 'app.edit',
 			url: "/cccar/edit/:id"
 			cache: false
@@ -44,8 +32,10 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 				resources: 'resources'
 				model: (resources, id) ->
 					ret = new resources.Record({id: id})
-					ret.$fetch()			
-		
+					ret.$fetch()
+				canEdit: (model) ->
+					model.status == 'Draft'
+						
 		$stateProvider.state 'app.read',
 			url: "/cccar/:id"
 			cache: false
@@ -60,6 +50,8 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 				model: (resources, id) ->
 					ret = new resources.Record({id: id})
 					ret.$fetch()
+				canEdit: ->
+					return false	
 					
-		$urlRouterProvider.otherwise('/cccar/create');
+		$urlRouterProvider.otherwise '/cccar/edit'
 		

@@ -21,10 +21,9 @@ services:
       - 8030:1337
     volumes:
       - ${COMPOSEROOT}/cccar/config/env/development.coffee:/usr/src/app/config/env/development.coffee
-      - ${COMPOSEROOT}/cccar/www/js/config/development.coffee:/usr/src/app/www/js/config/development.coffee
       - /etc/ssl/certs:/etc/ssl/certs
       - /usr/local/share/ca-certificates:/usr/local/share/ca-certificates
       - ${COMPOSEROOT}/cccar/entrypoint.sh:/usr/src/app/entrypoint.sh
       - ${COMPOSEROOT}/cccar:/usr/src/app
-    env_file: ../.env
+    env_file: ./.env
     entrypoint: top -b -d 1000

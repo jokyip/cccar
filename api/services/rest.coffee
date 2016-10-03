@@ -1,13 +1,7 @@
 _ = require 'lodash'
 http = require 'needle'
-fs = require 'fs'
 Promise = require 'bluebird'
 util = require 'util'
-
-dir = '/etc/ssl/certs'
-files = fs.readdirSync(dir).filter (file) -> /.*\.pem/i.test(file)
-files = files.map (file) -> "#{dir}/#{file}"
-ca = files.map (file) -> fs.readFileSync file
 
 ###
 options = 
@@ -15,8 +9,6 @@ options =
 	agent:		new agent('http://proxy1.scig.gov.hk:8080')
 ###
 module.exports = (options = sails.config.http.opts || {}) ->
-	_.defaults options, 
-		ca:			ca
 	
 	get: (token, url) ->
 		new Promise (fulfill, reject) ->

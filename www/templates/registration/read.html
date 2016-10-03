@@ -32,9 +32,9 @@
 		<br>
 		<div class="item">
 			<p>Issued by {{model.issuedBy}} on {{model.issuedAt | date:"dd/MM/yyyy 'at' h:mma"}}
-			<p ng-if="model.issuedBy && !model.endorsedBy"><b>{{model.status}} by {{model.nextHandler}}</b>
+			<p ng-if="model.nextAction == 'Endorse' && !model.endorsedBy"><b>{{model.status}} by {{model.nextHandler}}</b>
 			<p ng-if="model.endorsedBy">Endorsed by {{model.endorsedBy}} on {{model.endorsedAt | date:"dd/MM/yyyy 'at' h:mma"}}
-			<p ng-if="model.endorsedBy && !model.approvedBy"><b>{{model.status}} by {{model.nextHandler}}</b>
+			<p ng-if="model.nextAction == 'Approve' && !model.approvedBy"><b>{{model.status}} by {{model.nextHandler}}</b>
 			<p ng-if="model.approvedBy">Approved by {{model.approvedBy}} on {{model.approvedAt | date:"dd/MM/yyyy 'at' h:mma"}}
 		</div>
 	</div>	    	

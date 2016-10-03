@@ -7,3 +7,9 @@ module.exports =
 			findOne:	['isAuth']
 			create:		['isAuth', 'setOwner']
 			update:		['isAuth', 'setHandlerNDate']
+		WebhookController:
+			'*':		false
+			find:		['isAuth']
+			findOne:	['isAuth']
+			create:		['isAuth', 'setOwner']
+				

@@ -1,5 +1,6 @@
 module.exports = (req, res, next) ->
-	req.options.values = req.options.values || {}	
+	req.options.values = req.options.values || {}
+	sails.log req.body.goNext	
 	if req.body.goNext
 		sails.log req.body.nextAction
 		switch req.body.nextAction
@@ -12,5 +13,4 @@ module.exports = (req, res, next) ->
 			req.options.values.endorsedAt = new Date
 		if req.options.values.approvedBy
 			req.options.values.approvedAt = new Date
-	sails.log 'next'
 	next()
