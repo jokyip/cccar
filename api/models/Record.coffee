@@ -15,6 +15,7 @@ module.exports =
 		location:
 			type:	'string'
 			enum:	['WCDC','TWDC']
+			defaultsTo: ''
 			
 		number:
 			type:	'integer'

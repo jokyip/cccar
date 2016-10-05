@@ -10,13 +10,15 @@
 		 	<span class="input-label">{{'Record No.' | translate}}</span>
 			<input type="text" ng-model="model.number">
 		</label>
-		<label class="item item-input item-select">
+		<div class="item item-input">
 		    <span class="input-label">{{'Location' | translate}}</span>
-		    <select ng-model="model.location">
-		      <option>WCDC</option>
-		      <option>TWDC</option>
-		    </select>
-		</label>
+		    <fancy-select
+				template-url='templates/registration/select.html'
+				ng-selected="model.location"
+				ng-model="location"
+				title="{{'Select Location' | translate}}">
+			</fancy-select>
+		</div>
 		<label class="item item-input">
 		 	<span class="input-label">{{'Project' | translate}}</span>
 			<input type="text" ng-model="model.project">

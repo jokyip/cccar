@@ -22,9 +22,10 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 
 	.controller 'RegistrationCtrl', ($scope, model, canEdit, id, $location, $state) ->
 		if !canEdit
-			$location.url "/cccar/#{id}"			
+			$location.url "/cccar/#{id}"
 		_.extend $scope,
 			model: model
+			location: ['WCDC','TWDC']
 			save: ->
 				$scope.model.$save()
 					.then ->
