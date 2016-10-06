@@ -1,0 +1,10 @@
+version: '2'
+services:
+  cccar_mongo:
+    image: mongo
+    ports:
+      - 27017
+    volumes:
+      - ${COMPOSEROOT}/cccar_mongodata:/data/db
+    command: mongod --directoryperdb
+    env_file: ../.env

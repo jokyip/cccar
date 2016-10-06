@@ -1,22 +1,11 @@
 version: '2'
 services:
-  cccar_mongo:
-    image: mongo
-    container_name: cccar_mongo
-    hostname: cccar_mongo
-    ports:
-      - 27017
-    volumes:
-      - ${COMPOSEROOT}/cccar_mongodata:/data/db
-    command: mongod --directoryperdb
-    env_file: ../.env
-
   cccar:
-    depends_on:
-      - cccar_mongo
     image: jokyip/cccar
-    container_name: cccar
-    hostname: cccar
+    external_links:
+      - cccar_mongo
+    networks:
+      - cccarmongo_default
     ports:
       - 8030:1337
     volumes:
@@ -25,5 +14,11 @@ services:
       - /usr/local/share/ca-certificates:/usr/local/share/ca-certificates
       - ${COMPOSEROOT}/cccar/entrypoint.sh:/usr/src/app/entrypoint.sh
       - ${COMPOSEROOT}/cccar:/usr/src/app
+    environment:
+      SERVICE_NAME: cccar  
     env_file: ./.env
     entrypoint: top -b -d 1000
+
+networks:
+  cccarmongo_default:
+    external: true
