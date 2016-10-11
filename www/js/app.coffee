@@ -18,6 +18,19 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 			url: ""
 			abstract: true
 			templateUrl: "templates/menu.html"
+			
+		$stateProvider.state 'app.list',
+			url: "/cccar/list"
+			cache: false
+			views:
+				'menuContent':
+					templateUrl: "templates/registration/list.html"
+					controller: 'RegistrationListCtrl'
+			resolve:
+				resources: 'resources'
+				collection: (resources) ->
+					ret = new resources.RecordList()
+					ret.$fetch()	
 	
 		$stateProvider.state 'app.edit',
 			url: "/cccar/edit/:id"
@@ -53,5 +66,5 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 				canEdit: ->
 					return false	
 					
-		$urlRouterProvider.otherwise '/cccar/edit'
+		$urlRouterProvider.otherwise '/cccar/list'
 		

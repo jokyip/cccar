@@ -1,10 +1,34 @@
-<ion-header-bar class="item-input-inset">
-    <button class="button button-icon button-clear ion-navicon" menu-toggle="left">
-    </button>
-    <h1 class='title'>
-    	<span>{{'CCCAR' | translate}}</span>
-    </h1>
-    <button class="button ion-plus-round button-clear" ui-sref="app.create"></button>  
-</ion-header-bar>
-
-<ng-include src="'templates/registration/item.html'"></ng-include>
+<ion-view>
+	<ion-header-bar>
+  		<h1 class='title'>{{'My Registration' | translate}}</h1>
+	</ion-header-bar>
+	<ion-content>
+		<ion-refresher
+		    on-refresh="doRefresh()">
+		</ion-refresher>
+		<ion-list>
+			<label class="item item-input">
+			    <i class="icon ion-search placeholder-icon"></i>
+			    <input type="search" placeholder="Search" ng-model="keyword">
+			</label>
+			<ion-item ng-repeat="model in collection.models | regFilter: keyword">				
+				<div class='row'>
+					<div class='col'>
+						{{model.number}}
+					</div>
+					<div class='col'>
+						{{model.project}}
+					</div>
+					<div class='col'>
+						{{model.status}}
+					</div>
+					<div class='col'>
+						{{model.createdBy}}
+					</div>
+				</div>
+			</ion-item>
+		</ion-list>
+		<ion-infinite-scroll ng-if="collection.state.skip < collection.state.count" on-infinite="loadMore()">
+		</ion-infinite-scroll>	
+	</ion-content>
+</ion-view>

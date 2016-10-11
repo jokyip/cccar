@@ -1,8 +1,6 @@
 module.exports = (req, res, next) ->
 	req.options.values = req.options.values || {}
-	sails.log req.body.goNext	
 	if req.body.goNext
-		sails.log req.body.nextAction
 		switch req.body.nextAction
 			when "Issue" then req.options.values.issuedBy = req.user.username
 			when "Endorse" then req.options.values.endorsedBy = req.user.username

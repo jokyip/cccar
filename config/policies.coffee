@@ -3,7 +3,7 @@ module.exports =
 	policies:
 		RecordController:
 			'*':		false
-			find:		['isAuth']
+			find:		['isAuth', 'setOwner']
 			findOne:	['isAuth']
 			create:		['isAuth', 'setOwner']
 			update:		['isAuth', 'setHandlerNDate']
