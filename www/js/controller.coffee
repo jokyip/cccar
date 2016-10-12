@@ -54,6 +54,15 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 			r = new RegExp(search, 'i')
 			if search
 				return _.filter collection, (item) ->
+					r.test(item?.status)
+			else
+				return collection					
+						
+	.filter 'keywordFilter', ->
+		(collection, search) ->
+			r = new RegExp(search, 'i')
+			if search
+				return _.filter collection, (item) ->
 					r.test(item?.number) or r.test(item?.project) or r.test(item?.status)
 			else
-				return collection										
+				return collection
