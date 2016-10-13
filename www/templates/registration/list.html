@@ -1,9 +1,9 @@
 <div class="tabs-striped tabs-background-positive tabs-color-light">
 	<div class="tabs" ng-init="all='active'">
-		<a class="tab-item" ng-class="all" ng-click="status=''; all='active'; draft=''; pending=''; completed=''">All</a>
-		<a class="tab-item" ng-class="draft" ng-click="status='Draft'; all=''; draft='active'; pending=''; completed=''">Draft</a>
-		<a class="tab-item" ng-class="pending" ng-click="status='Pending'; all=''; draft=''; pending='active'; completed=''">Processing</a>
-		<a class="tab-item" ng-class="completed" ng-click="status='Completed'; all=''; draft=''; pending=''; completed='active'">Completed</a>
+		<a class="tab-item" ng-class="all" ng-click="status=''; all='active'; draft=''; pending=''; approved=''">All</a>
+		<a class="tab-item" ng-class="draft" ng-click="status='Draft'; all=''; draft='active'; pending=''; approved=''">Draft</a>
+		<a class="tab-item" ng-class="pending" ng-click="status='Pending'; all=''; draft=''; pending='active'; approved=''">Processing</a>
+		<a class="tab-item" ng-class="approved" ng-click="status='Approved'; all=''; draft=''; pending=''; approved='active'">Approved</a>
 	</div>
 </div>	
 <ion-view>	
@@ -20,7 +20,7 @@
 			    <input type="search" placeholder="Search" ng-model="keyword">
 			</label>
 			<ion-item ng-repeat="model in collection.models | regFilter: status | keywordFilter: keyword">				
-				<div class='row'>
+				<div class='row' ng-click="openurl(model)">
 					<div class='col'>
 						{{model.number}}
 					</div>

@@ -21,6 +21,11 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 			collection: collection
 			doRefresh: ->
 				$state.go($state.current, {}, {reload: true});
+			openurl: (model) ->				
+				url = "#/cccar/#{model.id}"
+				if model.status == 'Draft'
+					url = "#/cccar/edit/#{model.id}"
+				window.open(url, '_blank')	
 			loadMore: ->
 				collection.$fetch()
 					.then ->
