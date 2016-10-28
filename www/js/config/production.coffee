@@ -19,4 +19,6 @@ module.exports =
 			response_type:  "token"
 			scope:          "https://mob.myvnc.com/org/users"
 			client_id:      'cccarUAT'
-			
+	
+	orgChartUrl:	'https://mob.myvnc.com/orgchart'
+	myOrgchartUrl: '#{@orgChartUrl}/api/user/me'
