@@ -29,7 +29,5 @@ module.exports =
 			
 	beforeValidate: (values, cb) ->
 		@destroy cccarId:values.cccarId, event:values.event
-			.then (result) ->				
-		  		if (result)
-		    		sails.log('Webhook deleted')		  		
+			.then (result) ->
 				cb()
