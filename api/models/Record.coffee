@@ -64,6 +64,18 @@ module.exports =
 		approvedAt:
 			type: 	'datetime'
 			
+		withdrawnBy:
+			type:	'string'
+			
+		withdrawnAt:
+			type: 	'datetime'
+			
+		rejectedBy:
+			type:	'string'
+			
+		rejectedAt:
+			type: 	'datetime'		
+			
 		nextHandler:
 			type:	'string'
 			

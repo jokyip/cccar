@@ -11,7 +11,6 @@ module.exports =
 			.populateAll()
 			.then (obj) ->
 				sails.log.warn obj
-				sails.log.warn user.token
 				sails.services.rest()[obj.method] user.token, obj.callbackUrl, obj.data
 			.then (cbResult) ->
 				sails.log cbResult.statusCode	

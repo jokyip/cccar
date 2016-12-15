@@ -25,4 +25,11 @@ module.exports =
 			type:	'string'
 			
 		data:
-			type:	'json'			
+			type:	'json'
+			
+	beforeValidate: (values, cb) ->
+		@destroy cccarId:values.cccarId, event:values.event
+			.then (result) ->				
+		  		if (result)
+		    		sails.log('Webhook deleted')		  		
+				cb()

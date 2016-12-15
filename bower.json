@@ -26,7 +26,8 @@
     "sails-auth": "*",
     "sails.io.js": "https://github.com/twhtanghk/sails.io.js.git#master",
     "tagDirective": "*",
-    "util.auth": "*"
+    "util.auth": "*",
+    "angular-ui-select": "^0.19.6"
   },
   "devDependencies": {
     "ionic": "driftyco/ionic-bower#1.0.1"

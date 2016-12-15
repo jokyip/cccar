@@ -43,7 +43,27 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 			$location.url "/cccar/#{id}"
 		_.extend $scope,
 			model: model
-			location: ['WCDC','TWDC']			
+			location: ['WCDC','TWDC']
+			reject: ->
+				$scope.model.showAction = false
+				$scope.model.goNext = true
+				$scope.model.nextAction = 'Reject'
+				$scope.model.$save()
+					.then ->
+						info "Rejected"
+						$location.url "/cccar/#{id}"
+					.catch (err) ->
+						alert "Error: #{err}"
+			withdraw: ->
+				$scope.model.showAction = false
+				$scope.model.goNext = true
+				$scope.model.nextAction = 'Withdraw'
+				$scope.model.$save()
+					.then ->
+						info "Withdrawn"
+						$location.url "/cccar/#{id}"
+					.catch (err) ->
+						alert "Error: #{err}"
 			save: ->
 				$scope.model.$save()
 					.then ->
@@ -51,22 +71,14 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 					.catch (err) ->
 						alert "Error: #{err}"
 			submit: ->
-				$http.get(env.myOrgchartUrl)
-					.then (response, error) ->
-						if response.status == 200							
-							if angular.isUndefined(response.data.supervisor)
-								alert "Please click <a href=\"#{env.orgChartUrl}\" target=\"orgchart\">here</a> to define your supervisor before submission!"
-							else
-								$scope.model.showAction = false
-								$scope.model.goNext = true
-								$scope.model.$save()
-									.then ->						
-										info "#{$scope.model.nextAction}d successfully."
-										$location.url "/cccar/#{id}"					
-									.catch (err) ->
-										alert "Error: #{err}"	
-						else
-							alert error
+				$scope.model.showAction = false
+				$scope.model.goNext = true
+				$scope.model.$save()
+					.then ->						
+						info "#{$scope.model.nextAction}d successfully."
+						$location.url "/cccar/#{id}"					
+					.catch (err) ->
+						alert "Error: #{err}"
 						
 	.filter 'regFilter', ->
 		(collection, search) ->

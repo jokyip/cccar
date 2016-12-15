@@ -8,7 +8,7 @@ module.exports = (req, res) ->
 
 	Model.update({id: pk},data)
 		.then (updatedRecords) ->
-			updatedRecord = updatedRecords[0]			
+			updatedRecord = updatedRecords[0]
 			if data.goNext				
 				sails.services.webhook.callback pk, data.nextAction, req.user
 			res.ok updatedRecord
