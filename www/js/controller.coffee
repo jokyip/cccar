@@ -38,11 +38,12 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 						$scope.$broadcast('scroll.infiniteScrollComplete')
 					.catch alert						
 
-	.controller 'RegistrationCtrl', ($scope, model, canEdit, id, $location, $http) ->
+	.controller 'RegistrationCtrl', ($scope, model, historys, canEdit, id, $location, $http) ->
 		if !canEdit
 			$location.url "/cccar/#{id}"
 		_.extend $scope,
 			model: model
+			historys: historys
 			location: ['WCDC','TWDC']
 			reject: ->
 				$scope.model.showAction = false

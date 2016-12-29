@@ -12,4 +12,9 @@ module.exports =
 			find:		['isAuth']
 			findOne:	['isAuth']
 			create:		['isAuth', 'setOwner']
+		HistoryController:
+			'*':		false
+			find:		['isAuth', 'setOwner']
+			findOne:	['isAuth']
+			create:		['isAuth', 'setOwner']	
 				

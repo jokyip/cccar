@@ -44,7 +44,10 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 					$stateParams.id
 				resources: 'resources'
 				model: (resources, id) ->
-					ret = new resources.Record({id: id})
+					ret = new resources.Record id: id
+					ret.$fetch()
+				historys: (resources) ->
+					ret = new resources.HistoryList
 					ret.$fetch()
 				canEdit: (model) ->
 					model.status == 'Draft'
@@ -61,8 +64,11 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 					$stateParams.id
 				resources: 'resources'
 				model: (resources, id) ->
-					ret = new resources.Record({id: id})
+					ret = new resources.Record id: id
 					ret.$fetch()
+				historys: (resources, id) ->
+					ret = new resources.HistoryList
+					ret.$fetch params: {cccarId: id}	
 				canEdit: ->
 					return false	
 					
