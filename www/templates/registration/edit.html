@@ -8,6 +8,10 @@
   <ion-content >
 	<div class="list">
 		<label class="item item-input">
+			<span class="input-label">{{'Status' | translate}}</span>
+			<div class="col">{{model.status}}</div>
+		</label>
+		<label class="item item-input">
 		 	<span class="input-label">{{'Record No.' | translate}}</span>
 			<input type="text" ng-model="model.number">
 		</label>
