@@ -9452,3 +9452,8 @@ input.todoCheckbox {
 .zoom-pane img {
   width: 100%;
   vertical-align: middle; }
+
+span.toggle-label {
+  padding-left: 10px;
+  padding-right: 10px;
+  display: block; }

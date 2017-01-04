@@ -20,3 +20,5 @@ module.exports =
 			scope:          "https://mob.myvnc.com/org/users"
 			client_id:      'cccarDEV'
 			
+	orgChartUrl:	'https://mob.myvnc.com/orgchart'
+	myOrgchartUrl: '#{@orgChartUrl}/api/user/me'					
