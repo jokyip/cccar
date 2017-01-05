@@ -21,4 +21,6 @@ module.exports =
 			client_id:      'cccarDEV'
 			
 	orgChartUrl:	'https://mob.myvnc.com/orgchart'
-	myOrgchartUrl: '#{@orgChartUrl}/api/user/me'					
+	myOrgchartUrl: '#{@orgChartUrl}/api/user/me'
+	loadPage:
+		timeout: 1500					

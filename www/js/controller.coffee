@@ -38,7 +38,7 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 						$scope.$broadcast('scroll.infiniteScrollComplete')
 					.catch alert						
 
-	.controller 'RegistrationCtrl', ($scope, model, historys, canEdit, id, $location, $http) ->
+	.controller 'RegistrationCtrl', ($scope, model, historys, canEdit, id, $location, $http, $timeout, $state) ->
 		if !canEdit
 			$location.url "/cccar/#{id}"
 		_.extend $scope,
@@ -52,7 +52,7 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 				$scope.model.$save()
 					.then ->
 						info "Rejected"
-						$location.url "/cccar/#{id}"
+						$timeout (=> $state.reload()), env.loadPage.timeout
 					.catch (err) ->
 						alert "Error: #{err}"
 			withdraw: ->
@@ -62,7 +62,10 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 				$scope.model.$save()
 					.then ->
 						info "Withdrawn"
-						$location.url "/cccar/#{id}"
+						if !canEdit
+							$timeout (=> $state.reload()), env.loadPage.timeout
+						else		
+							$timeout (=> $location.url "/cccar/#{id}"), env.loadPage.timeout
 					.catch (err) ->
 						alert "Error: #{err}"
 			save: ->
@@ -77,7 +80,10 @@ angular.module 'starter.controller', [ 'ionic', 'http-auth-interceptor', 'ngCord
 				$scope.model.$save()
 					.then ->						
 						info "#{$scope.model.nextAction}d successfully."
-						$location.url "/cccar/#{id}"					
+						if !canEdit
+							$timeout (=> $state.reload()), env.loadPage.timeout
+						else		
+							$timeout (=> $location.url "/cccar/#{id}"), env.loadPage.timeout					
 					.catch (err) ->
 						alert "Error: #{err}"
 						

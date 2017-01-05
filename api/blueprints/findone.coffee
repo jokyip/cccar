@@ -9,7 +9,7 @@ module.exports = (req, res) ->
 		.then (matchingRecord) ->    	
 			if !matchingRecord
 				res.notFound('No record found with the specified `id`.')
-			if matchingRecord.nextHandler == req.user.username || matchingRecord.status == 'Draft'
+			if matchingRecord.nextHandler == req.user.username || (!matchingRecord.nextHandler && matchingRecord.status == 'Draft')
 				matchingRecord.showAction = true
 			res.ok matchingRecord
 		.catch res.serverError 	

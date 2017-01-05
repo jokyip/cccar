@@ -50,7 +50,7 @@ angular.module 'starter', ['ngFancySelect', 'ionic', 'util.auth', 'starter.contr
 					ret = new resources.HistoryList
 					ret.$fetch()
 				canEdit: (model) ->
-					model.status == 'Draft'
+					model.status == 'Draft' || model.status == 'Rejected' 
 						
 		$stateProvider.state 'app.read',
 			url: "/cccar/:id"
