@@ -23,4 +23,4 @@ module.exports =
 	orgChartUrl:	'https://mob.myvnc.com/orgchart'
 	myOrgchartUrl: '#{@orgChartUrl}/api/user/me'
 	loadPage:
-		timeout: 1500	
+		timeout: 2000	
